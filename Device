@@ -1,0 +1,116 @@
+namespace SimulatedDevice
+{
+    using System;
+    using System.Collections.Generic;
+    using System.IO.Ports;
+    using System.Text;
+    using System.Threading.Tasks;
+    using Microsoft.Azure.Devices.Client;
+    using Newtonsoft.Json;
+
+    public class Program
+    {
+        private const string IotHubUri = "[URL]";
+        private const string DeviceKey = "3c8T6//gPTrPLG3Wk4djgRFWThAktKYcsupz6ou0cwk=";
+        private const string DeviceId = "arduino";
+        private const double MinTemperature = 20;
+        private const double MinHumidity = 60;
+
+        private static readonly Random Rand = new Random();
+        private static DeviceClient _deviceClient;
+        private static int _messageId = 1;
+
+        private static async void SendDeviceToCloudMessagesAsync()
+        {
+
+            var serial = new SerialPort
+            {
+                BaudRate = 9600,
+                PortName = "COM5"
+            };
+
+            serial.DtrEnable = true;
+            serial.RtsEnable = true;
+
+            serial.DataReceived += Serial_DataReceived;
+
+            serial.Open();
+        }
+
+        private static void Serial_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        {
+
+            SerialPort spL = (SerialPort)sender;
+            byte[] buf = new byte[spL.BytesToRead];
+
+            spL.Read(buf, 0, buf.Length);
+
+            var data = Encoding.Default.GetString(buf);
+
+            string[] lines = data.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var item in lines)
+            {
+                try
+                {
+
+                    var values = item.Split(';');
+
+                    if (values.Length == 2)
+                    {
+                        var value = new Value
+                        {
+
+                            Humidity = Convert.ToDouble(values[1]),
+                            Temperature = Convert.ToDouble(values[0]),
+                        };
+
+                        Send(value);
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                }
+            }
+            
+        }
+
+        private static void Send(Value value)
+        {
+            var telemetryDataPoint = new
+            {
+                messageId = _messageId++,
+                deviceId = DeviceId,
+                temperature = value.Temperature,
+                humidity = value.Humidity
+            };
+
+            var messageString = JsonConvert.SerializeObject(telemetryDataPoint);
+            var message = new Message(Encoding.ASCII.GetBytes(messageString));
+
+            //message.Properties.Add("temperatureAlert", (currentTemperature > 30) ? "true" : "false");
+
+            _deviceClient.SendEventAsync(message);
+
+            Console.WriteLine("{0} > Sending message: {1}", DateTime.Now, messageString);
+        }
+
+        public class Value
+        {
+            public double Temperature { get; set; }
+            public double Humidity { get; set; }
+        }
+
+
+        private static void Main(string[] args)
+        {
+            Console.WriteLine("Simulated device\n");
+            _deviceClient = DeviceClient.Create(IotHubUri, new DeviceAuthenticationWithRegistrySymmetricKey(DeviceId, DeviceKey), TransportType.Mqtt);
+            _deviceClient.ProductInfo = "HappyPath_Simulated-CSharp";
+
+            SendDeviceToCloudMessagesAsync();
+            Console.ReadLine();
+        }
+    }
+}
