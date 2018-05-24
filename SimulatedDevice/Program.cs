@@ -1,4 +1,4 @@
-namespace SimulatedDevice
+﻿namespace SimulatedDevice
 {
     using System;
     using System.Collections.Generic;
@@ -10,9 +10,9 @@ namespace SimulatedDevice
 
     public class Program
     {
-        private const string IotHubUri = "device aqui";
-        private const string DeviceKey = "DeviceKey aqui=";
-        private const string DeviceId = "DeviceId aqui";
+        private const string IotHubUri = "HIoTdemo.azure-devices.net";
+        private const string DeviceKey = "3c8T6//gPTrPLG3Wk4djgRFWThAktKYcsupz6ou0cwk=";
+        private const string DeviceId = "arduino";
 
         private static DeviceClient _deviceClient;
         private static int _messageId = 1;
