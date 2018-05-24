@@ -10,13 +10,10 @@ namespace SimulatedDevice
 
     public class Program
     {
-        private const string IotHubUri = "[URL]";
-        private const string DeviceKey = "3c8T6//gPTrPLG3Wk4djgRFWThAktKYcsupz6ou0cwk=";
-        private const string DeviceId = "arduino";
-        private const double MinTemperature = 20;
-        private const double MinHumidity = 60;
+        private const string IotHubUri = "device aqui";
+        private const string DeviceKey = "DeviceKey aqui=";
+        private const string DeviceId = "DeviceId aqui";
 
-        private static readonly Random Rand = new Random();
         private static DeviceClient _deviceClient;
         private static int _messageId = 1;
 
@@ -26,28 +23,21 @@ namespace SimulatedDevice
             var serial = new SerialPort
             {
                 BaudRate = 9600,
-                PortName = "COM5"
+                PortName = "COM5",
+                DtrEnable = true,
+                RtsEnable = true
             };
 
-            serial.DtrEnable = true;
-            serial.RtsEnable = true;
-
             serial.DataReceived += Serial_DataReceived;
-
             serial.Open();
         }
 
         private static void Serial_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
+            SerialPort sp = (SerialPort)sender;
+            string indata = sp.ReadLine();
 
-            SerialPort spL = (SerialPort)sender;
-            byte[] buf = new byte[spL.BytesToRead];
-
-            spL.Read(buf, 0, buf.Length);
-
-            var data = Encoding.Default.GetString(buf);
-
-            string[] lines = data.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+            var lines = indata.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
 
             foreach (var item in lines)
             {
@@ -56,27 +46,31 @@ namespace SimulatedDevice
 
                     var values = item.Split(';');
 
-                    if (values.Length == 2)
+                    if (values.Length != 2) continue;
+
+                    var Humidity = Convert.ToDouble(values[1]);
+                    var Temperature = Convert.ToDouble(values[0]);
+
+                    if (Humidity < 10 || Temperature < 10)
+                        continue;
+
+                    var value = new Value
                     {
-                        var value = new Value
-                        {
+                        Humidity = Humidity,
+                        Temperature = Temperature,
+                    };
 
-                            Humidity = Convert.ToDouble(values[1]),
-                            Temperature = Convert.ToDouble(values[0]),
-                        };
-
-                        Send(value);
-                    }
+                    SendAsync(value).Wait();
 
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                 }
             }
-            
+
         }
 
-        private static void Send(Value value)
+        private static async Task SendAsync(Value value)
         {
             var telemetryDataPoint = new
             {
@@ -89,9 +83,15 @@ namespace SimulatedDevice
             var messageString = JsonConvert.SerializeObject(telemetryDataPoint);
             var message = new Message(Encoding.ASCII.GetBytes(messageString));
 
-            //message.Properties.Add("temperatureAlert", (currentTemperature > 30) ? "true" : "false");
+            try
+            {
+                await _deviceClient.SendEventAsync(message);
+            }
+            catch (Exception ex)
+            {
 
-            _deviceClient.SendEventAsync(message);
+                Console.WriteLine("{0} > Error: {1}", DateTime.Now, ex.Message);
+            }
 
             Console.WriteLine("{0} > Sending message: {1}", DateTime.Now, messageString);
         }
